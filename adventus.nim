@@ -9,6 +9,38 @@ template `:=`*(a, b): untyped {.dirty.}= (let a = b; a)
 template inputf*(ex: int = 0): untyped =
   instantiationInfo(-1, true).filename & "/../input" & $ex
 
+from tables import Table, contains, `[]=`, `[]`, `$`, pairs
+export
+  tables.Table, tables.contains, tables.pairs,
+  tables.`[]=`, tables.`[]`, tables.`$`
+proc force*[K,V](tbl: var Table[K, seq[V]]; k: K; v: V) =
+  if k in tbl:
+    add(tbl[k], v)
+  else:
+    tbl[k] = @[v]
+template `[]=`*[K,V](tbl: var Table[K, seq[V]]; k: K; v: V) =
+  force(tbl, k, v)
+
+template bracketAccess*(T: typedesc; where: untyped): untyped {.dirty.}=
+  template `[]` *(t: T; i: int): typeof(t.where[i]) =
+    t.where[i]
+  template `[]=`*(t: T; i: int; e: typeof(t.where[i])): void =
+    t.where[i] = e
+  template items*(t: T): untyped =
+    items(t.where)
+
+iterator chop*(i: int): int8 =
+  var i = i
+  while i > 0:
+    yield int8 i mod 10
+    i = i div 10
+
+iterator ichop*(i: int): (int, int8) =
+  var j = 0
+  for i in chop(i):
+    yield (j, i)
+    j += 1
+
 iterator ilines*(f: File): (int, TaintedString) =
   var i: int = 0
   for ln in lines(f):
@@ -38,12 +70,10 @@ proc bfind*[T, S](a: T; item: S or set[S]; s: SomeNumber): int {.inline.}=
     inc(result)
   result = -1
 
-const
-  bflen = 1024
-  slinesStatic = true
-
+const bflen = 1024
 template cs(a): string = cast[string](a)
-from strutils import strip
+from strutils import strip, Whitespace
+export strutils.strip, strutils.Whitespace
 iterator slines*(f: File; s: char or set[char]): (int, TaintedString) =
   var (i, ln, rs) = (0, 1, "")
   while ln != 0:
@@ -56,7 +86,13 @@ iterator slines*(f: File; s: char or set[char]): (int, TaintedString) =
       yield (i, rs)
       (p, i, rs) = (n+1, i+1, "")
     add(rs, cs(buf[p..^1]))
-  yield (i, strip(rs, leading = false, chars = {'\0'}))
+  yield (i, strip(rs, leading = false, chars = Whitespace + {'\0'}))
+
+iterator slines*(fn: string; s: char or set[char]): (int, TaintedString) =
+  let f = open(fn)
+  for i, l in slines(f, s):
+    yield (i, l)
+  close(f)
 
 from parseutils import
   parseint, parseuint, parsefloat,
