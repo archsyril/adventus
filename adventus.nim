@@ -1,6 +1,28 @@
 const
   Comments = false
 
+import std/net, std/httpclient, std/strformat, std/os, std/osproc, std/streams
+proc dl*(year, day, step: int; manualCookie: string = ""): File = 
+  var filename = fmt"{step}.data"
+  if fileExists(filename):
+    return open(filename)
+  var cookie = manualCookie
+  if manualCookie == "":
+    var file = open("../../session.cookie")
+    cookie = file.readAll()
+    file.close()
+  var
+    url = fmt"https://adventofcode.com/{year}/day/{day}/input"
+    process = startProcess("curl", args = ["-s", "--cookie", fmt"session={cookie}", url], options = {})
+    file = open(filename, fmWrite)
+  while process.running():
+    file.write outputStream(process).readAll()
+  process.close()
+  file.close()
+
+  echo fmt"Downloaded {filename}"
+  return open(filename)
+
 # Absolute Addition Operator
 template `|+|`*(a,b: typed): untyped = (abs(a) + abs(b))
 # Assign & Return Operator
@@ -41,7 +63,7 @@ iterator ichop*(i: int): (int, int8) =
     yield (j, i)
     j += 1
 
-iterator ilines*(f: File): (int, TaintedString) =
+iterator ilines*(f: File): (int, string) =
   var i: int = 0
   for ln in lines(f):
     when Comments:
@@ -51,7 +73,7 @@ iterator ilines*(f: File): (int, TaintedString) =
       yield (i, ln)
     i += 1
 
-iterator ilines*(filename: string): (int, TaintedString) =
+iterator ilines*(filename: string): (int, string) =
   var f = open(filename)
   for i, ln in ilines(f):
     yield (i, ln)
@@ -71,10 +93,11 @@ proc bfind*[T, S](a: T; item: S or set[S]; s: SomeNumber): int {.inline.}=
   result = -1
 
 const bflen = 1024
+
 template cs(a): string = cast[string](a)
 from strutils import strip, Whitespace
 export strutils.strip, strutils.Whitespace
-iterator slines*(f: File; s: char or set[char]): (int, TaintedString) =
+iterator slines*(f: File; s: char or set[char]): (int, string) =
   var (i, ln, rs) = (0, 1, "")
   while ln != 0:
     var
@@ -88,7 +111,7 @@ iterator slines*(f: File; s: char or set[char]): (int, TaintedString) =
     add(rs, cs(buf[p..^1]))
   yield (i, strip(rs, leading = false, chars = Whitespace + {'\0'}))
 
-iterator slines*(fn: string; s: char or set[char]): (int, TaintedString) =
+iterator slines*(fn: string; s: char or set[char]): (int, string) =
   let f = open(fn)
   for i, l in slines(f, s):
     yield (i, l)
@@ -97,7 +120,7 @@ iterator slines*(fn: string; s: char or set[char]): (int, TaintedString) =
 from parseutils import
   parseint, parseuint, parsefloat,
   parseBiggestInt, parseBiggestUint, parseBiggestFloat
-# prettier (imo) parsing, with parsed return value
+# prettier parsing, with parsed return value
 template q(T,F) = (var r: T; discard F(s,r); r)
 proc parse*(T: typedesc; s: string): T =
   when T is int64:
@@ -113,4 +136,10 @@ proc parse*(T: typedesc; s: string): T =
   elif T is SomeFloat:
     q(float, parseFloat)
 
+func `*`*(s: string, num: Natural): string =
+  var res = newStringOfCap(s.len * num)
+  for i in 0..num:
+    res.add(s)
+  return res
 
+echo "hello " * 5
